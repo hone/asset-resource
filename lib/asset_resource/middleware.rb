@@ -26,9 +26,6 @@ class AssetResource::Middleware
       filetype :styles,  "css"
     end
 
-    puts handlers.inspect
-    puts filetypes.inspect
-
     translator :less do |filename|
       begin
         require "less"
@@ -52,17 +49,12 @@ class AssetResource::Middleware
     if env["PATH_INFO"] =~ %r{\A/assets/(.+)}
       asset = $1
       fileprefix, filetype = asset.split(".")
-      puts "asset: #{asset}"
-      puts "fileprefix: #{fileprefix}"
-      puts "type: #{filetype}"
       files = nil
 
       if handles?(fileprefix)
         files = files_for(fileprefix)
       end
       files = find_filename(asset)
-
-      puts "files: #{files}"
 
       if files
         return [200, asset_headers(fileprefix), process_files(files)]
@@ -87,15 +79,12 @@ private ######################################################################
 
   def find_filename(filename)
     type = filetypes.invert[filename.split('.').last].to_s
-    puts "find_filename path: #{File.expand_path(File.join(base_path, type, "**", "*"))}"
     Dir.glob(File.expand_path(File.join(base_path, type, "**", "*"))).select do |file|
-      puts "file: #{file.split('/').last}"
       file.split('/').last == filename && File.exist?(file)
     end
   end
 
   def files_for(type)
-    puts "files_for path: #{File.expand_path(File.join(base_path, type, "**", "*"))}"
     Dir.glob(File.expand_path(File.join(base_path, type, "**", "*"))).select do |file|
       File.exist?(file)
     end
