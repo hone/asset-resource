@@ -17,6 +17,18 @@ class AssetResource::Middleware
       handle :styles,  "text/css"
     end
 
+    if options[:filetypes] then
+      options[:filetypes].each do |type, file_type|
+        filetype type.to_sym, file_type
+      end
+    else
+      filetype :scripts, "js"
+      filetype :styles,  "css"
+    end
+
+    puts handlers.inspect
+    puts filetypes.inspect
+
     translator :less do |filename|
       begin
         require "less"
@@ -37,11 +49,28 @@ class AssetResource::Middleware
   end
 
   def call(env)
-    if env["PATH_INFO"] =~ %r{\A/assets/(.+)\B}
-      type = $1.split(".").first
-      return app.call(env) unless handles?(type)
-      return [200, asset_headers(type), process_files(files_for(type))]
+    if env["PATH_INFO"] =~ %r{\A/assets/(.+)}
+      asset = $1
+      fileprefix, filetype = asset.split(".")
+      puts "asset: #{asset}"
+      puts "fileprefix: #{fileprefix}"
+      puts "type: #{filetype}"
+      files = nil
+
+      if handles?(fileprefix)
+        files = files_for(fileprefix)
+      end
+      files = find_filename(asset)
+
+      puts "files: #{files}"
+
+      if files
+        return [200, asset_headers(fileprefix), process_files(files)]
+      end
+
+      return app.call(env)
     end
+
     app.call(env)
   end
 
@@ -56,7 +85,17 @@ private ######################################################################
     options[:base_path] || "public"
   end
 
+  def find_filename(filename)
+    type = filetypes.invert[filename.split('.').last].to_s
+    puts "find_filename path: #{File.expand_path(File.join(base_path, type, "**", "*"))}"
+    Dir.glob(File.expand_path(File.join(base_path, type, "**", "*"))).select do |file|
+      puts "file: #{file.split('/').last}"
+      file.split('/').last == filename && File.exist?(file)
+    end
+  end
+
   def files_for(type)
+    puts "files_for path: #{File.expand_path(File.join(base_path, type, "**", "*"))}"
     Dir.glob(File.expand_path(File.join(base_path, type, "**", "*"))).select do |file|
       File.exist?(file)
     end
@@ -74,12 +113,24 @@ private ######################################################################
     @handler ||= {}
   end
 
+  def filetypes
+    @filetypes ||= {}
+  end
+
   def handles?(type)
     handlers.keys.include?(type.to_sym)
   end
 
+  def handles_filetype?(type)
+    filetypes.values.include?(type.to_sym)
+  end
+
   def handle(type, mime_type)
     handlers[type.to_sym] = mime_type
+  end
+
+  def filetype(type, file_type)
+    filetypes[type.to_sym] = file_type
   end
 
   def default_translator
